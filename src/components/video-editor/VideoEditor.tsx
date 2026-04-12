@@ -1,5 +1,5 @@
 import type { Span } from "dnd-timeline";
-import { FolderOpen, Languages, Save, Video } from "lucide-react";
+import { Bug, Download, FolderOpen, Languages, Save, Star, Video } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Panel, PanelGroup, PanelResizeHandle } from "react-resizable-panels";
 import { toast } from "sonner";
@@ -39,6 +39,7 @@ import {
 	isPortraitAspectRatio,
 } from "@/utils/aspectRatioUtils";
 import { ExportDialog } from "./ExportDialog";
+import { ExportSettingsDialog } from "./ExportSettingsDialog";
 import PlaybackControls from "./PlaybackControls";
 import {
 	createProjectData,
@@ -151,6 +152,7 @@ export default function VideoEditor() {
 	const [exportProgress, setExportProgress] = useState<ExportProgress | null>(null);
 	const [exportError, setExportError] = useState<string | null>(null);
 	const [showExportDialog, setShowExportDialog] = useState(false);
+	const [showExportSettingsDialog, setShowExportSettingsDialog] = useState(false);
 	const [showNewRecordingDialog, setShowNewRecordingDialog] = useState(false);
 	const [exportQuality, setExportQuality] = useState<ExportQuality>("good");
 	const [exportFormat, setExportFormat] = useState<ExportFormat>("mp4");
@@ -2228,6 +2230,18 @@ export default function VideoEditor() {
 			return;
 		}
 
+		setShowExportSettingsDialog(true);
+		setExportError(null);
+		setExportedFilePath(null);
+	}, [videoPath]);
+
+	const handleStartExportFromSettings = useCallback(() => {
+		const video = videoPlaybackRef.current?.video;
+		if (!video) {
+			toast.error("Video not ready");
+			return;
+		}
+
 		// Build export settings from current state
 		const sourceWidth = video.videoWidth || 1920;
 		const sourceHeight = video.videoHeight || 1080;
@@ -2258,6 +2272,7 @@ export default function VideoEditor() {
 					: undefined,
 		};
 
+		setShowExportSettingsDialog(false);
 		setShowExportDialog(true);
 		setExportError(null);
 		setExportedFilePath(null);
@@ -2265,7 +2280,6 @@ export default function VideoEditor() {
 		// Start export immediately
 		handleExport(settings);
 	}, [
-		videoPath,
 		exportFormat,
 		exportQuality,
 		gifFrameRate,
@@ -2390,6 +2404,41 @@ export default function VideoEditor() {
 					>
 						<Save size={14} />
 						{ts("project.save")}
+					</button>
+				</div>
+				<div
+					className="flex items-center gap-2"
+					style={{ WebkitAppRegion: "no-drag" } as React.CSSProperties}
+				>
+					<button
+						type="button"
+						onClick={() => {
+							window.electronAPI?.openExternalUrl(
+								"https://github.com/siddharthvaddem/openscreen/issues/new/choose",
+							);
+						}}
+						className="flex items-center gap-1 px-2 py-1 rounded-md text-white/50 hover:text-white/90 hover:bg-white/10 transition-all duration-150 text-[11px] font-medium"
+					>
+						<Bug size={14} />
+						{ts("links.reportBug")}
+					</button>
+					<button
+						type="button"
+						onClick={() => {
+							window.electronAPI?.openExternalUrl("https://github.com/siddharthvaddem/openscreen");
+						}}
+						className="flex items-center gap-1 px-2 py-1 rounded-md text-white/50 hover:text-white/90 hover:bg-white/10 transition-all duration-150 text-[11px] font-medium"
+					>
+						<Star size={14} />
+						{ts("links.starOnGithub")}
+					</button>
+					<button
+						type="button"
+						onClick={handleOpenExportDialog}
+						className="flex items-center gap-1 px-3 py-1 rounded-md bg-[#34B27B] text-white hover:bg-[#34B27B]/90 transition-all duration-150 text-[11px] font-semibold shadow-lg shadow-[#34B27B]/20"
+					>
+						<Download size={14} />
+						{exportFormat === "gif" ? ts("export.gifButton") : ts("export.videoButton")}
 					</button>
 				</div>
 			</div>
@@ -2634,30 +2683,6 @@ export default function VideoEditor() {
 						onWebcamSizePresetChange={(v) => updateState({ webcamSizePreset: v })}
 						onWebcamSizePresetCommit={commitState}
 						videoElement={videoPlaybackRef.current?.video || null}
-						exportQuality={exportQuality}
-						onExportQualityChange={setExportQuality}
-						exportFormat={exportFormat}
-						onExportFormatChange={setExportFormat}
-						gifFrameRate={gifFrameRate}
-						onGifFrameRateChange={setGifFrameRate}
-						gifLoop={gifLoop}
-						onGifLoopChange={setGifLoop}
-						gifSizePreset={gifSizePreset}
-						onGifSizePresetChange={setGifSizePreset}
-						gifOutputDimensions={calculateOutputDimensions(
-							videoPlaybackRef.current?.video?.videoWidth || 1920,
-							videoPlaybackRef.current?.video?.videoHeight || 1080,
-							gifSizePreset,
-							GIF_SIZE_PRESETS,
-							aspectRatio === "native"
-								? getNativeAspectRatioValue(
-										videoPlaybackRef.current?.video?.videoWidth || 1920,
-										videoPlaybackRef.current?.video?.videoHeight || 1080,
-										cropRegion,
-									)
-								: getAspectRatioValue(aspectRatio),
-						)}
-						onExport={handleOpenExportDialog}
 						selectedAnnotationId={selectedAnnotationId}
 						annotationRegions={annotationOnlyRegions}
 						onAnnotationContentChange={handleAnnotationContentChange}
@@ -2678,8 +2703,6 @@ export default function VideoEditor() {
 						}
 						onSpeedChange={handleSpeedChange}
 						onSpeedDelete={handleSpeedDelete}
-						unsavedExport={unsavedExport}
-						onSaveUnsavedExport={handleSaveUnsavedExport}
 						selectedZoomInDuration={
 							selectedZoomId
 								? (zoomRegions.find((z) => z.id === selectedZoomId)?.zoomInDurationMs ??
@@ -2698,6 +2721,37 @@ export default function VideoEditor() {
 					/>
 				</div>
 			</div>
+
+			<ExportSettingsDialog
+				open={showExportSettingsDialog}
+				onOpenChange={setShowExportSettingsDialog}
+				onExport={handleStartExportFromSettings}
+				exportFormat={exportFormat}
+				onExportFormatChange={setExportFormat}
+				exportQuality={exportQuality}
+				onExportQualityChange={setExportQuality}
+				gifFrameRate={gifFrameRate}
+				onGifFrameRateChange={setGifFrameRate}
+				gifLoop={gifLoop}
+				onGifLoopChange={setGifLoop}
+				gifSizePreset={gifSizePreset}
+				onGifSizePresetChange={setGifSizePreset}
+				gifOutputDimensions={calculateOutputDimensions(
+					videoPlaybackRef.current?.video?.videoWidth || 1920,
+					videoPlaybackRef.current?.video?.videoHeight || 1080,
+					gifSizePreset,
+					GIF_SIZE_PRESETS,
+					aspectRatio === "native"
+						? getNativeAspectRatioValue(
+								videoPlaybackRef.current?.video?.videoWidth || 1920,
+								videoPlaybackRef.current?.video?.videoHeight || 1080,
+								cropRegion,
+							)
+						: getAspectRatioValue(aspectRatio),
+				)}
+				unsavedExport={unsavedExport}
+				onSaveUnsavedExport={handleSaveUnsavedExport}
+			/>
 
 			<ExportDialog
 				isOpen={showExportDialog}
